@@ -1,7 +1,9 @@
+
 import pygame as pg
 from colors import Colors
 from env import Env
 from agent import Agent
+
 
 pg.init()
 
