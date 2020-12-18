@@ -7,17 +7,17 @@ import random
 
 class Agent(object):
     def __init__(self, env):
-        self.__gamma = 0.95
-        self.__eps = 1
-        self.__eps_min = 0.01
-        self.__eps_decay = 0.995
-        self.__batch_size = 64
-        self.__lr = 0.001
-        self.__env = env 
-        self.__memory = deque(maxlen=100000)
+        self.__gamma = 0.95                     # learning rate
+        self.__eps = 1                          # epsilon
+        self.__eps_min = 0.01                   # min epsilon
+        self.__eps_decay = 0.995                # 
+        self.__batch_size = 64                  # 
+        self.__lr = 0.001                       # learning rate
+        self.__env = env                        # environment of the agent
+        self.__memory = deque(maxlen=100000)    # array of past actions
         self.__model = self.__model() 
 
-    def __model(self):
+    def __model(self):                  # initialize model
         model = Sequential()
         model.add(Dense(64, input_shape=(10,), activation='relu')) # self.__env.state_space-6
         model.add(Dense(64, activation='relu'))
@@ -25,7 +25,7 @@ class Agent(object):
         model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
         return model
 
-    def __remember(self, state, action, reward, next_state, done):
+    def __remember(self, state, action, reward, next_state, done):      # add previous to memory
         self.__memory.append((state, action, reward, next_state, done))
 
     def __act(self, state):
@@ -35,16 +35,16 @@ class Agent(object):
         act_values = self.__model.predict(np.reshape(np.array(state), (1,10)))
         return np.argmax(act_values[0])
 
-    def __replay(self):
-        if len(self.__memory) < self.__batch_size:
+    def __replay(self):                                             # FIXME replay?
+        if len(self.__memory) < self.__batch_size:                  # if memory is not full yet
             return
 
-        minibatch = random.sample(self.__memory, self.__batch_size)
-        states = np.array([i[0] for i in minibatch])
-        actions = np.array([i[1] for i in minibatch])
-        rewards = np.array([i[2] for i in minibatch])
-        next_states = np.array([i[3] for i in minibatch])
-        dones = np.array([i[4] for i in minibatch])
+        minibatch = random.sample(self.__memory, self.__batch_size) # choose batch_size unique elements from mem 
+        states = np.array([i[0] for i in minibatch])                # get states from minibatch
+        actions = np.array([i[1] for i in minibatch])               # get actions from minibatch
+        rewards = np.array([i[2] for i in minibatch])               # get rewards from minibatch
+        next_states = np.array([i[3] for i in minibatch])           # get next_states from minibatch
+        dones = np.array([i[4] for i in minibatch])                 # get dones from minibatch
 
         # states = np.squeeze(states)
         # next_states = np.squeeze(next_states)
@@ -71,7 +71,7 @@ class Agent(object):
         elif action == 3:
             print("down")
 
-    def train(self, epochs):
+    def train(self, epochs):            # iterate training
         loss = []
         max_moves = 50
          
