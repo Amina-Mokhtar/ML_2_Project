@@ -4,6 +4,10 @@ from keras.optimizers import Adam
 from collections import deque
 import numpy as np
 import random
+from env import Env
+from colors import Colors
+import time
+import pygame as pg
 
 class Agent(object):
     def __init__(self, env):
@@ -17,7 +21,7 @@ class Agent(object):
         self.__memory = deque(maxlen=100000)    # array of past actions
         self.__model = self.__model() 
 
-    def __model(self):                  # initialize model
+    def __model(self):                  # initialize model, 1 input, 1 hidden, 1 output later
         model = Sequential()
         model.add(Dense(64, input_shape=(10,), activation='relu')) # self.__env.state_space-6
         model.add(Dense(64, activation='relu'))
@@ -71,14 +75,16 @@ class Agent(object):
         elif action == 3:
             print("down")
 
-    def train(self, epochs):            # iterate training
+    def train(self, epochs, draw=False):            # iterate training
         loss = []
         max_moves = 50
          
-        for e in range(epochs):
+        for e in range(epochs):         # iterate number of epochs
             state = self.__env.reset() 
             score = 0
-            for m in range(max_moves):
+            screen, background, X, Y = self.__env.vars()
+            
+            for m in range(max_moves):  # iterate moves until win or max. moves
                 action = self.__act(state)
                 self.foo(action)
                 reward, next_state, done = self.__env.step(action)
@@ -86,6 +92,14 @@ class Agent(object):
                 self.__remember(state, action, reward, next_state, done)
                 state = next_state
                 self.__replay()
+
+                if draw:
+                    screen.fill(Colors.BACKGROUND)  # fill screen with background colour
+                    screen.blit(background, (X, Y)) # draw board squares onto screen
+                    self.__env.drawPieces(Colors.BLUE, Colors.RED) # draw pieces on board
+                    pg.display.update()
+                    time.sleep(.25)
+
                 if done:
                     print("Dooooooooone:")
                     break

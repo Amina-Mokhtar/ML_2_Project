@@ -122,9 +122,9 @@ class Env(object):
         reward = 0
 
         if (action == 0 or action == 3):    # give reward for movement
-            reward -= 4
+            reward -= 4                     # negative for moving left and dwon
         else:
-            reward += 4
+            reward += 4                     # positive for moving rihgt and up
 
         self.move(temp_id, action)          # move pieces
         state = self.__get_state()          # get new state
