@@ -10,8 +10,8 @@ import time
 env = Env(width=800, height=600, dim=6) # create an environment object
 agent = Agent(env)                      # create an agent
 
-ep = 100
-draw = False
+ep = 2
+draw = True
 loss = agent.train(ep,draw)                  # Train the agent
 plt.plot([i for i in range(ep)], loss)
 plt.xlabel('episodes')
