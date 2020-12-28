@@ -8,6 +8,7 @@ from env import Env
 from colors import Colors
 import time
 import pygame as pg
+from tqdm import tqdm
 
 class Agent(object):
     def __init__(self, env):
@@ -19,9 +20,9 @@ class Agent(object):
         self.__lr = 0.001                       # learning rate
         self.__env = env                        # environment of the agent
         self.__memory = deque(maxlen=100000)    # array of past actions
-        self.__model = self.__model() 
+        self.__model = self.__model()           # NN model
 
-    def __model(self):                  # initialize model, 1 input, 1 hidden, 1 output later
+    def __model(self):          # initialize model, 1 input, 1 hidden, 1 output later
         model = Sequential()
         model.add(Dense(64, input_shape=(10,), activation='relu')) # self.__env.state_space-6
         model.add(Dense(64, activation='relu'))
@@ -37,9 +38,10 @@ class Agent(object):
             return random.randrange(self.__env.action_space)
 
         act_values = self.__model.predict(np.reshape(np.array(state), (1,10)))
+        
         return np.argmax(act_values[0])
 
-    def __replay(self):                                             # FIXME replay?
+    def __replay(self):                                             # replay and update weights
         if len(self.__memory) < self.__batch_size:                  # if memory is not full yet
             return
 
@@ -59,49 +61,63 @@ class Agent(object):
         ind = np.array([i for i in range(self.__batch_size)])
         targets_full[[ind], [actions]] = targets
 
-        print(states.shape, targets_full.shape)
+        # print(states.shape, targets_full.shape)
 
         self.__model.fit(states, targets_full, epochs=1, verbose=0)
         if self.__eps > self.__eps_min:
             self.__eps *= self.__eps_decay
 
-    def foo(self, action):
+    def print_action(self, action, piece_id):
         if action == 0:
-            print("left")
+            print(str(piece_id)+" left")
         elif action == 1:
-            print("right")
+            print(str(piece_id)+" right")
         elif action == 2:
-            print("up")
+            print(str(piece_id)+" up")
         elif action == 3:
-            print("down")
+            print(str(piece_id)+" down")
+
+    def __pa2pa(self, piece_action):
+        piece_id = int(np.floor(piece_action/ self.__env.npieces))
+        action = piece_action % self.__env.npieces
+        return piece_id, action
 
     def train(self, epochs, draw=False):            # iterate training
         loss = []
-        max_moves = 50
+        max_moves = 1000
          
-        for e in range(epochs):         # iterate number of epochs
+        for e in tqdm(range(epochs)):                     # iterate number of epochs
             state = self.__env.reset() 
             score = 0
-            screen, background, X, Y = self.__env.vars()
+            screen, font, background, X, Y = self.__env.vars()
             
-            for m in range(max_moves):  # iterate moves until win or max. moves
-                action = self.__act(state)
-                self.foo(action)
-                reward, next_state, done = self.__env.step(action)
+            for m in tqdm(range(max_moves)):    # iterate moves until win or max. moves
+                piece_action = self.__act(state)
+                piece_id, action = self.__pa2pa(piece_action)
+                while not self.__env.valid(piece_id,action):
+                    piece_action = self.__act(state)
+                    piece_id, action = self.__pa2pa(piece_action)
+                # print(piece_action)
+                # self.print_action(action, piece_id)
+                valid = self.__env.valid(piece_id,action)
+                reward, next_state, done = self.__env.step(piece_id, action)
                 score += reward
-                self.__remember(state, action, reward, next_state, done)
+                self.__remember(state, piece_action, reward, next_state, done)
                 state = next_state
                 self.__replay()
 
                 if draw:
                     screen.fill(Colors.BACKGROUND)  # fill screen with background colour
                     screen.blit(background, (X, Y)) # draw board squares onto screen
+                    img = font.render(str(piece_id)+' '+str(action)+' '+str(valid), True, Colors.WHITE)
+                    screen.blit(img, (20, 20))
                     self.__env.drawPieces(Colors.BLUE, Colors.RED) # draw pieces on board
                     pg.display.update()
-                    time.sleep(.25)
+                    time.sleep(.05)
 
                 if done:
                     print("Dooooooooone:")
                     break
+            print("Done, or max. moves reached")
             loss.append(score)
         return loss

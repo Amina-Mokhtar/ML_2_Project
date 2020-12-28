@@ -5,11 +5,13 @@ import numpy as np
 import itertools
 
 class Env(object):
-    def __init__(self, width, height, dim):
+    def __init__(self, width, height, dim, seed=0):
         self.__screen = pg.display.set_mode((width, height))    # pygame screen object
+        self.__font = pg.font.SysFont(None, 24)
         self.__length = 30                                      # size of pieces
         self.__step = 75                                        # width of board squares (px)
         self.__dim = dim                                        # dimensions of board
+        self.__seed = seed                                      # define seed used in generating opponent
         self.__n = dim - 4                                      # dimension of starting square of pieces
         self.__color = itertools.cycle((Colors.WHITE, Colors.BLACK))    # board colours
         self.__board_length = self.__dim * self.__step          # board size in px
@@ -66,15 +68,27 @@ class Env(object):
         return state
 
     def __done(self):                   # return whether pieces are in finish positions
-        temp_id = 1                     # currently only checks for piece 1
-        x = self.__pieces[temp_id].x
-        y = self.__pieces[temp_id].y
+        # temp_id = 1                     # currently only checks for piece 1
+        # x = self.__pieces[temp_id].x
+        # y = self.__pieces[temp_id].y
+        # return (x >= self.__step*(self.__dim-self.__n) + self.__X and y <= self.__step*self.__n + self.__Y)
 
-        return (x >= self.__step*(self.__dim-self.__n) + self.__X and y <= self.__step*self.__n + self.__Y)
+        x = np.zeros([self.npieces,1])
+        y = np.zeros([self.npieces,1])
+        for i in range(self.npieces):
+            x[i] = self.__pieces[i].x
+            y[i] = self.__pieces[i].y
 
-    def move(self, id, action):
+        Xs = (x >= (self.__step*(self.__dim-self.__n) + self.__X))
+        Ys = (y <= (self.__step*self.__n + self.__Y))
+        done = Xs.all() and Ys.all()
+        partialdone = np.count_nonzero(Xs & Ys)
+        return done, partialdone
+
+
+    def valid(self, id, action):                    # determine whether move is valid.
         if (id < 0 or id > (2*self.__n - 1)):       # if piece exists
-            return 
+            return False
         
         rest_pieces = [item for i, item in enumerate(self.__pieces) if i not in [id]] + self.__obst # pieces that are not moved
 
@@ -82,26 +96,69 @@ class Env(object):
             for item in rest_pieces:
                 if (item.x == self.__pieces[id].x - self.__step and item.y == self.__pieces[id].y or    # there is a piece in the new position
                     self.__pieces[id].x - self.__step < self.__X):                                      # new position is out of bounds
-                    return 
-            self.__pieces[id].x -= self.__step  # move piece if valid
+                    return False
+            return True
         elif action == 1:
             for item in rest_pieces:
                 if (item.x == self.__pieces[id].x + self.__step and item.y == self.__pieces[id].y or 
                     self.__pieces[id].x + self.__step > self.__board_length + self.__X):
-                    return 
-            self.__pieces[id].x += self.__step  # move piece
+                    return False
+            return True
         elif action == 2:
             for item in rest_pieces:
                 if (item.y == self.__pieces[id].y - self.__step and item.x == self.__pieces[id].x or
                     self.__pieces[id].y - self.__step < self.__Y):
-                    return 
-            self.__pieces[id].y -= self.__step  # move piece
+                    return False
+            return True
         elif action == 3:
             for item in rest_pieces:
                 if (item.y == self.__pieces[id].y + self.__step and item.x == self.__pieces[id].x or
                     self.__pieces[id].y + self.__step > self.__board_length + self.__Y):
-                    return 
-            self.__pieces[id].y += self.__step  # move piece
+                    return False
+            return True
+
+    def move(self, id, action):
+        if not self.valid(id, action):       # if piece exists
+            return 
+        elif action == 0:
+            self.__pieces[id].x -= self.__step  # move piece if valid left
+        elif action == 1:
+            self.__pieces[id].x += self.__step  # move piece right
+        elif action == 2:
+            self.__pieces[id].y -= self.__step  # move piece down
+        elif action == 3:
+            self.__pieces[id].y += self.__step  # move piece up
+
+    # def move(self, id, action):
+    #     if (id < 0 or id > (2*self.__n - 1)):       # if piece exists
+    #         return 
+        
+    #     rest_pieces = [item for i, item in enumerate(self.__pieces) if i not in [id]] + self.__obst # pieces that are not moved
+
+    #     if action == 0:
+    #         for item in rest_pieces:
+    #             if (item.x == self.__pieces[id].x - self.__step and item.y == self.__pieces[id].y or    # there is a piece in the new position
+    #                 self.__pieces[id].x - self.__step < self.__X):                                      # new position is out of bounds
+    #                 return 
+    #         self.__pieces[id].x -= self.__step  # move piece if valid
+    #     elif action == 1:
+    #         for item in rest_pieces:
+    #             if (item.x == self.__pieces[id].x + self.__step and item.y == self.__pieces[id].y or 
+    #                 self.__pieces[id].x + self.__step > self.__board_length + self.__X):
+    #                 return 
+    #         self.__pieces[id].x += self.__step  # move piece
+    #     elif action == 2:
+    #         for item in rest_pieces:
+    #             if (item.y == self.__pieces[id].y - self.__step and item.x == self.__pieces[id].x or
+    #                 self.__pieces[id].y - self.__step < self.__Y):
+    #                 return 
+    #         self.__pieces[id].y -= self.__step  # move piece
+    #     elif action == 3:
+    #         for item in rest_pieces:
+    #             if (item.y == self.__pieces[id].y + self.__step and item.x == self.__pieces[id].x or
+    #                 self.__pieces[id].y + self.__step > self.__board_length + self.__Y):
+    #                 return 
+    #         self.__pieces[id].y += self.__step  # move piece
 
     def __get_state(self):      # board state with player and obstacle pos.
         temp_id = 1             # piece 1
@@ -117,22 +174,30 @@ class Env(object):
         for rect in self.__obst:
             pg.draw.rect(self.__screen, color2, rect)
 
-    def step(self, action):                 # one training step
-        temp_id = 1
-        reward = 0
+    def step(self, piece_id, action):                 # one training step
+        done, partial = self.__done()                # return new x and y of pieces
 
+        reward = partial                    # reward for having more pieces
+                                            # in the final square
+        if done:
+            reward += 10
+        
         if (action == 0 or action == 3):    # give reward for movement
-            reward -= 4                     # negative for moving left and dwon
+            reward -= 2                     # negative for moving left and dwon
         else:
-            reward += 4                     # positive for moving rihgt and up
+            reward += 1                     # positive for moving rihgt and up
 
-        self.move(temp_id, action)          # move pieces
+        self.move(piece_id, action)          # move pieces
         state = self.__get_state()          # get new state
-        done = self.__done()                # return new x and y of pieces
+        
         return reward, state, done
 
     def vars(self):
-        return self.__screen, self.__background, self.__X, self.__Y     # return variables to main.py
+        return self.__screen, self.__font, self.__background, self.__X, self.__Y     # return variables to main.py
+
+    @property
+    def npieces(self):
+        return self.__n**2
 
     @property
     def state_space(self):
@@ -140,4 +205,4 @@ class Env(object):
 
     @property
     def action_space(self):
-        return 4                # Action space
+        return 4*(self.npieces)  # Action space, 4 moves per piece

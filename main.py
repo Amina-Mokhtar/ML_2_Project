@@ -5,21 +5,23 @@ from agent import Agent
 import matplotlib.pyplot as plt
 import time
 
-# pg.init()
+pg.init()
 
 env = Env(width=800, height=600, dim=6) # create an environment object
 agent = Agent(env)                      # create an agent
 
-ep = 2
+ep = 100
 draw = True
 loss = agent.train(ep,draw)                  # Train the agent
+
+note = ''
 plt.plot([i for i in range(ep)], loss)
 plt.xlabel('episodes')
 plt.ylabel('reward')
-plt.title('Training with %i episodes' %ep)
+plt.title('Training with ' + str(ep) + ' episodes.' + note)
 plt.savefig("training_" + time.strftime("%Y-%m-%d_%H-%M-%S") +".png")
 
-screen, background, X, Y = env.vars()   # Get variables from environment
+screen, font, background, X, Y = env.vars()   # Get variables from environment
 
 game_exit = False                       # start a game
 while not game_exit:
@@ -34,6 +36,7 @@ while not game_exit:
         #         env.move(1, 1)
         #     if event.key == pg.K_UP:
         #         env.move(1, 2)
+        
         #     if event.key == pg.K_DOWN:
         #         env.move(1, 3)
 
