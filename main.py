@@ -1,51 +1,23 @@
 import pygame as pg
+import matplotlib.pyplot as plt
+import time
 from colors import Colors
 from env import Env
 from agent import Agent
-import matplotlib.pyplot as plt
-import time
+from board import Board
 
+ep = 50                                # number of episodes
+draw = True                             # whether to show baord in action
 
-pg.init()
+env = Env(dim=6)                        # create an environment object
+board = Board(env,width=800, height=600)    # create board
+agent = Agent(env, board)                      # create an agent
 
-env = Env(width=800, height=600, dim=6) # create an environment object
-agent = Agent(env)                      # create an agent
+loss = agent.train(ep,draw)             # Train the agent
 
-ep = 1
-draw = True
-loss = agent.train(ep,draw)                  # Train the agent
-
-note = ''
+note = ''                               # note to add to image
 plt.plot([i for i in range(ep)], loss)
 plt.xlabel('episodes')
 plt.ylabel('reward')
 plt.title('Training with ' + str(ep) + ' episodes.' + note)
 plt.savefig("training_" + time.strftime("%Y-%m-%d_%H-%M-%S") +".png")
-
-screen, font, background, X, Y = env.vars()   # Get variables from environment
-
-game_exit = False                       # start a game
-while not game_exit:
-    for event in pg.event.get():
-        if event.type == pg.QUIT:
-            game_exit = True
-        # for i in agent.__memory
-        # if event.type == pg.KEYDOWN:
-        #     if event.key == pg.K_LEFT:
-        #         env.move(1, 0)
-        #     if event.key == pg.K_RIGHT:
-        #         env.move(1, 1)
-        #     if event.key == pg.K_UP:
-        #         env.move(1, 2)
-        
-        #     if event.key == pg.K_DOWN:
-        #         env.move(1, 3)
-
-    if not draw:             
-        screen.fill(Colors.BACKGROUND)  # fill screen with background colour
-        screen.blit(background, (X, Y)) # draw board squares onto screen
-        env.drawPieces(Colors.BLUE, Colors.RED) # draw pieces on board
-        pg.display.update()
-
-pg.quit()
-

@@ -4,24 +4,26 @@ from keras.optimizers import Adam
 from collections import deque
 import numpy as np
 import random
-from env import Env
-from colors import Colors
-import time
-import pygame as pg
 from tqdm import tqdm
+from env import Env
+from board import Board
 
 class Agent(object):
-    def __init__(self, env):
+    '''
+    Handle training the agent
+    '''
+    def __init__(self, env,board):
         self.__gamma = 0.95                     # learning rate
         self.__eps = 1                          # epsilon
-        self.__eps_min = 0.001                   # min epsilon
+        self.__eps_min = 0.001                  # min epsilon
         self.__eps_decay = 0.995                # 
         self.__batch_size = 64                  # 
-        self.__lr = 0.01                       # learning rate
+        self.__lr = 0.01                        # learning rate
         self.__env = env                        # environment of the agent
+        self.__board = board
         self.__memory = deque(maxlen=100000)    # array of past actions
-        self.__model = self.__model()           # NN model
-
+        self.__model = self.__model()
+    
     def __model(self):          # initialize model, 1 input, 1 hidden, 1 output later
         model = Sequential()
         model.add(Dense(64, input_shape=(10,), activation='relu')) # self.__env.state_space-6
@@ -83,13 +85,13 @@ class Agent(object):
         return piece_id, action
 
     def train(self, epochs, draw=False):            # iterate training
+        self.__board.draw_board()
         loss = []
-        max_moves = 200
+        max_moves = 100
          
         for e in tqdm(range(epochs)):                     # iterate number of epochs
             state = self.__env.reset() 
             score = 0
-            screen, font, background, X, Y = self.__env.vars()
             
             for m in tqdm(range(max_moves)):    # iterate moves until win or max. moves
                 piece_action = self.__act(state)
@@ -97,23 +99,18 @@ class Agent(object):
                 while not self.__env.valid(piece_id,action):
                     piece_action = self.__act(state)
                     piece_id, action = self.__pa2pa(piece_action)
-                # print(piece_action)
-                # self.print_action(action, piece_id)
                 valid = self.__env.valid(piece_id,action)
                 reward, next_state, done = self.__env.step(piece_id, action)
-                score += reward - np.log(m+1)             # penamlise taking long
+                score += reward - np.log(m+1)             # penalise taking long
                 self.__remember(state, piece_action, reward, next_state, done)
                 state = next_state
                 self.__replay()
 
                 if draw:
-                    screen.fill(Colors.BACKGROUND)  # fill screen with background colour
-                    screen.blit(background, (X, Y)) # draw board squares onto screen
-                    img = font.render(str(piece_id)+' '+str(action)+' '+str(valid), True, Colors.WHITE)
-                    screen.blit(img, (20, 20))
-                    self.__env.drawPieces(Colors.BLUE, Colors.RED) # draw pieces on board
-                    pg.display.update()
-                    # time.sleep(.05)
+                    text = 'Episode: '+str(e)+'/'+str(epochs) + \
+                            ', Move: '+str(m)+', '+ \
+                            str(piece_id)+' '+str(action)+' '+str(valid)
+                    self.__board.draw_board(text)
 
                 if done:
                     print("Dooooooooone:\n")
