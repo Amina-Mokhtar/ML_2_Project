@@ -14,10 +14,10 @@ class Agent(object):
     def __init__(self, env):
         self.__gamma = 0.95                     # learning rate
         self.__eps = 1                          # epsilon
-        self.__eps_min = 0.01                   # min epsilon
+        self.__eps_min = 0.001                   # min epsilon
         self.__eps_decay = 0.995                # 
         self.__batch_size = 64                  # 
-        self.__lr = 0.001                       # learning rate
+        self.__lr = 0.01                       # learning rate
         self.__env = env                        # environment of the agent
         self.__memory = deque(maxlen=100000)    # array of past actions
         self.__model = self.__model()           # NN model
@@ -84,7 +84,7 @@ class Agent(object):
 
     def train(self, epochs, draw=False):            # iterate training
         loss = []
-        max_moves = 1000
+        max_moves = 200
          
         for e in tqdm(range(epochs)):                     # iterate number of epochs
             state = self.__env.reset() 
@@ -101,7 +101,7 @@ class Agent(object):
                 # self.print_action(action, piece_id)
                 valid = self.__env.valid(piece_id,action)
                 reward, next_state, done = self.__env.step(piece_id, action)
-                score += reward
+                score += reward - np.log(m+1)             # penamlise taking long
                 self.__remember(state, piece_action, reward, next_state, done)
                 state = next_state
                 self.__replay()
@@ -113,11 +113,11 @@ class Agent(object):
                     screen.blit(img, (20, 20))
                     self.__env.drawPieces(Colors.BLUE, Colors.RED) # draw pieces on board
                     pg.display.update()
-                    time.sleep(.05)
+                    # time.sleep(.05)
 
                 if done:
-                    print("Dooooooooone:")
+                    print("Dooooooooone:\n")
                     break
-            print("Done, or max. moves reached")
+            print("Done, or max. moves reached\n")
             loss.append(score)
         return loss

@@ -5,12 +5,13 @@ from agent import Agent
 import matplotlib.pyplot as plt
 import time
 
+
 pg.init()
 
 env = Env(width=800, height=600, dim=6) # create an environment object
 agent = Agent(env)                      # create an agent
 
-ep = 100
+ep = 1
 draw = True
 loss = agent.train(ep,draw)                  # Train the agent
 

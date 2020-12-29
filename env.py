@@ -177,7 +177,7 @@ class Env(object):
     def step(self, piece_id, action):                 # one training step
         done, partial = self.__done()                # return new x and y of pieces
 
-        reward = partial                    # reward for having more pieces
+        reward = 5*partial                  # reward for having more pieces
                                             # in the final square
         if done:
             reward += 10
@@ -185,7 +185,7 @@ class Env(object):
         if (action == 0 or action == 3):    # give reward for movement
             reward -= 2                     # negative for moving left and dwon
         else:
-            reward += 1                     # positive for moving rihgt and up
+            reward += 2                     # positive for moving rihgt and up
 
         self.move(piece_id, action)          # move pieces
         state = self.__get_state()          # get new state
