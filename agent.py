@@ -26,7 +26,7 @@ class Agent(object):
     
     def __model(self):          # initialize model, 1 input, 1 hidden, 1 output later
         model = Sequential()
-        model.add(Dense(64, input_shape=(10,), activation='relu')) # self.__env.state_space-6
+        model.add(Dense(64, input_shape=(16,), activation='relu')) # self.__env.state_space-6
         model.add(Dense(64, activation='relu'))
         model.add(Dense(self.__env.action_space, activation='linear'))
         model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
@@ -36,10 +36,12 @@ class Agent(object):
         self.__memory.append((state, action, reward, next_state, done))
 
     def __act(self, state):
+        valid_moves = self.__env.valid_moves()
         if np.random.rand() <= self.__eps:
-            return random.randrange(self.__env.action_space)
+            return np.random.choice(valid_moves)   # instead of action space, use set of valid moves
+# how to make it work for below I don't know... Have to restrict the model to predict valid moves... 
 
-        act_values = self.__model.predict(np.reshape(np.array(state), (1,10)))
+        act_values = self.__model.predict(np.reshape(np.array(state), (1,16)))
         
         return np.argmax(act_values[0])
 
@@ -69,7 +71,7 @@ class Agent(object):
         if self.__eps > self.__eps_min:
             self.__eps *= self.__eps_decay
 
-    def print_action(self, action, piece_id):
+    def __print_action(self, action, piece_id):
         if action == 0:
             print(str(piece_id)+" left")
         elif action == 1:
@@ -84,10 +86,9 @@ class Agent(object):
         action = piece_action % self.__env.npieces
         return piece_id, action
 
-    def train(self, epochs, draw=False):            # iterate training
-        self.__board.draw_board()
+    def train(self, epochs):            # iterate training
         loss = []
-        max_moves = 100
+        max_moves = 60
          
         for e in tqdm(range(epochs)):                     # iterate number of epochs
             state = self.__env.reset() 
@@ -105,12 +106,11 @@ class Agent(object):
                 self.__remember(state, piece_action, reward, next_state, done)
                 state = next_state
                 self.__replay()
-
-                if draw:
-                    text = 'Episode: '+str(e)+'/'+str(epochs) + \
+                
+                text = 'Episode: '+str(e)+'/'+str(epochs) + \
                             ', Move: '+str(m)+', '+ \
                             str(piece_id)+' '+str(action)+' '+str(valid)
-                    self.__board.draw_board(text)
+                self.__board.draw_board(text)
 
                 if done:
                     print("Dooooooooone:\n")

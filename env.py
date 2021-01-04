@@ -25,14 +25,16 @@ class Env(object):
         for i in range(self.npieces):
             pieces[i] = [r[i],c[i]]
 
+        k = 0
         mem = []
-        for i in range(self.npieces):
+        while k < self.npieces:
             r = random.randint(self.__dim - 1) 
             c = random.randint(self.__dim - 1)
             if (not ((c in c_range and r in r_range) or (c in r_range and r in c_range))):
                 if ((r, c) not in mem):
                     mem.append((r, c))
-                    obst[i] = [r,c]
+                    obst[k] = [r,c]
+                    k += 1
                     
         return pieces, obst
         
@@ -48,10 +50,10 @@ class Env(object):
         x = np.zeros([self.npieces,1])
         y = np.zeros([self.npieces,1])
         for i in range(self.npieces):
-            x,y = self.__pieces[i]
+            x[i],y[i] = self.__pieces[i]
 
         Xs = (x >= (self.__dim-self.__n))
-        Ys = (y <= (self.__n))
+        Ys = (y < (self.__n))
         done = Xs.all() and Ys.all()
         partialdone = np.count_nonzero(Xs & Ys)
         return done, partialdone
@@ -93,7 +95,7 @@ class Env(object):
                     return False
             return True
 
-    def move(self, id, action):
+    def __move(self, id, action):
         if not self.valid(id, action):       # if piece exists
             return 
         elif action == 0:
@@ -106,27 +108,25 @@ class Env(object):
             self.__pieces[id][1] += 1  # move piece up
 
     def __get_state(self):      # board state with player and obstacle pos.
-        # temp_id = 1             # piece 1
         pieces_pos = self.__pieces.flatten()     # piece position
         obst_pos = self.__obst.flatten()        # obstacle positions
-        # state = pieces_pos + obst_pos
         state = np.concatenate((pieces_pos,obst_pos))
         return state
 
     def step(self, piece_id, action):           # one training step
         done, partial = self.__done()           # return new x and y of pieces
-
-        reward = 5*partial                  # reward for having more pieces
+        # reward = 5*partial                  # reward for having more pieces
                                             # in the final square
+        reward = 0
         if done:
             reward += 10
         
         if (action == 0 or action == 3):    # give reward for movement
-            reward -= 2                     # negative for moving left and dwon
+            reward -= 3                     # negative for moving left and dwon
         else:
-            reward += 2                     # positive for moving rihgt and up
+            reward += 2                     # positive for moving right and up
 
-        self.move(piece_id, action)          # move pieces
+        self.__move(piece_id, action)          # move pieces
         state = self.__get_state()          # get new state
         
         return reward, state, done
