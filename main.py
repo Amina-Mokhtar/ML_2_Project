@@ -10,7 +10,7 @@ pg.init()
 env = Env(width=800, height=600, dim=6)
 
 agent = Agent(env)
-loss = agent.train(2)
+loss = agent.train(50)
 
 screen, background, X, Y = env.vars()
 
@@ -28,14 +28,12 @@ while not game_exit:
         #         env.move(1, 2)
         #     if event.key == pg.K_DOWN:
         #         env.move(1, 3)
-                 
+
     screen.fill(Colors.BACKGROUND)
     screen.blit(background, (X, Y))
 
     env.drawPieces(Colors.BLUE, Colors.RED)
-    
+
     pg.display.update()
 
 pg.quit()
-
-    

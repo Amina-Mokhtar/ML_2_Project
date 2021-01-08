@@ -3,37 +3,53 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 from collections import deque
 import numpy as np
+import math
 import random
 
 class Agent(object):
     def __init__(self, env):
-        self.__gamma = 0.95
-        self.__eps = 1
+        self.__gamma = 0.9
+        self.__eps = 0.1
         self.__eps_min = 0.01
         self.__eps_decay = 0.995
         self.__batch_size = 64
         self.__lr = 0.001
-        self.__env = env 
+        self.__env = env
         self.__memory = deque(maxlen=100000)
-        self.__model = self.__model() 
+        self.__model = self.__model()
 
     def __model(self):
         model = Sequential()
-        model.add(Dense(64, input_shape=(10,), activation='relu')) # self.__env.state_space-6
+        model.add(Dense(64, input_shape=(6*6+1,), activation='relu'))
         model.add(Dense(64, activation='relu'))
         model.add(Dense(self.__env.action_space, activation='linear'))
         model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
         return model
 
-    def __remember(self, state, action, reward, next_state, done):
-        self.__memory.append((state, action, reward, next_state, done))
+    def __remember(self, state, action, reward, next_state, id, done):
+        self.__memory.append((state, action, reward, next_state, id, done))
 
     def __act(self, state):
-        if np.random.rand() <= self.__eps:
-            return random.randrange(self.__env.action_space)
+        # temp_id = 1
+        # if np.random.rand() <= self.__eps:
+        #     moves, jumps = self.__env.availableMoves(temp_id)
+        #     action = np.random.choice(moves + jumps, 1)
+        #     return action[0]
 
-        act_values = self.__model.predict(np.reshape(np.array(state), (1,10)))
-        return np.argmax(act_values[0])
+        best_action = None
+        best_value = -math.inf
+        best_id = None
+
+        for id in range(4): # change to a variable, dont leave loose ends...
+            model_state = np.append(state, id)
+            act_values = self.__model.predict(np.reshape(np.array(model_state), (1, 6*6+1)))
+            temp_max = np.max(act_values[0])
+            if temp_max > best_value:
+                best_value = temp_max
+                best_id = id
+                best_action = np.argmax(act_values[0])
+
+        return best_action, best_id
 
     def __replay(self):
         if len(self.__memory) < self.__batch_size:
@@ -44,10 +60,21 @@ class Agent(object):
         actions = np.array([i[1] for i in minibatch])
         rewards = np.array([i[2] for i in minibatch])
         next_states = np.array([i[3] for i in minibatch])
-        dones = np.array([i[4] for i in minibatch])
+        ids = np.array([i[4] for i in minibatch])
+        dones = np.array([i[5] for i in minibatch])
 
-        # states = np.squeeze(states)
-        # next_states = np.squeeze(next_states)
+        next_states_temp = []
+        states_temp = []
+        for i in range(len(next_states)):
+            states_temp.append(np.append(states[i], ids[i]))
+            next_states_temp.append(np.append(next_states[i], ids[i]))
+
+
+        next_states = np.array(next_states_temp)
+        states = np.array(states_temp)
+        # print("shaaaaaaape")
+        # print(next_states.shape)
+        # print(next_states.shape)
 
         targets = rewards + self.__gamma*(np.amax(self.__model.predict_on_batch(next_states), axis=1))*(1-dones)
         targets_full = self.__model.predict_on_batch(states)
@@ -55,39 +82,32 @@ class Agent(object):
         ind = np.array([i for i in range(self.__batch_size)])
         targets_full[[ind], [actions]] = targets
 
-        print(states.shape, targets_full.shape)
-
         self.__model.fit(states, targets_full, epochs=1, verbose=0)
         if self.__eps > self.__eps_min:
             self.__eps *= self.__eps_decay
 
-    def foo(self, action):
-        if action == 0:
-            print("left")
-        elif action == 1:
-            print("right")
-        elif action == 2:
-            print("up")
-        elif action == 3:
-            print("down")
-
     def train(self, epochs):
         loss = []
-        max_moves = 50
-         
+        max_moves = 100
+        re = []
+
         for e in range(epochs):
-            state = self.__env.reset() 
+            state = self.__env.reset()
             score = 0
+            print(e)
             for m in range(max_moves):
-                action = self.__act(state)
-                self.foo(action)
-                reward, next_state, done = self.__env.step(action)
+                action, id = self.__act(state)
+                reward, next_state, done = self.__env.step(action, id)
+                re.append(reward)
+
                 score += reward
-                self.__remember(state, action, reward, next_state, done)
+                self.__remember(state, action, reward, next_state, id, done)
                 state = next_state
                 self.__replay()
                 if done:
                     print("Dooooooooone:")
                     break
             loss.append(score)
+        print(loss)
+        #print(re)
         return loss

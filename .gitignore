@@ -2,3 +2,4 @@
 __pycache__
 cachegrind.out.main
 training*.png
+venv
