@@ -124,22 +124,19 @@ class Env(object):
                     valid_moves[int(y),int(x),i] = 1
         return valid_moves
 
-    def __move(self, id, action):
-        if not self.valid(id, action):       # if piece exists
-            return 
-        elif action == 0:
-            self.__pieces[id,0] -= 1  # move piece if valid left
-        elif action == 1:
-            self.__pieces[id,0] += 1  # move piece right
-        elif action == 2:
-            self.__pieces[id,1] -= 1  # move piece up
-        elif action == 3:
-            self.__pieces[id,1] += 1  # move piece down
+    # def __move(self, id, action):
+    #     if not self.valid(id, action):       # if piece exists
+    #         return 
+    #     elif action == 0:
+    #         self.__pieces[id,0] -= 1  # move piece if valid left
+    #     elif action == 1:
+    #         self.__pieces[id,0] += 1  # move piece right
+    #     elif action == 2:
+    #         self.__pieces[id,1] -= 1  # move piece up
+    #     elif action == 3:
+    #         self.__pieces[id,1] += 1  # move piece down
 
     def __get_state(self):      # board state with player and obstacle pos.
-        # pieces_pos = self.__pieces.flatten()     # piece position
-        # obst_pos = self.__obst.flatten()        # obstacle positions
-        # state = np.concatenate((pieces_pos,obst_pos))
         state = np.zeros((self.__dim,self.__dim,2))
         for i in range(self.npieces):
             x = self.__pieces.astype(int)[i,0]
@@ -166,8 +163,6 @@ class Env(object):
         #     reward -= 10                     # negative for moving left and dwon
         # else:
         #     reward += 2                     # positive for moving right and up
-
-        self.__move(piece_id, action)          # move pieces
         
         state = self.__get_state()          # get new state
         return reward, state, done
