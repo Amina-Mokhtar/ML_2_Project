@@ -1,4 +1,4 @@
 .vscode
 __pycache__
 cachegrind.out.main
-training*.png
+*.png
