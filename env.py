@@ -1,9 +1,5 @@
-from numpy import random
-from tensorflow.python.framework.ops import disable_tensor_equality
-from colors import Colors
-import pygame as pg
 import numpy as np
-import itertools
+from numpy import random
 
 class Env(object):
     '''
@@ -12,9 +8,11 @@ class Env(object):
     def __init__(self, dim, seed=0):
         self.__dim = dim                                        # dimensions of board
         self.__seed = seed                                      # define seed used in generating opponent
-        self.__n = dim - 4                                      # dimension of starting square of pieces
+        self.__n = 2                                      # dimension of starting square of pieces
         self.__pieces, self.__obst = self.__createPieces()
         self.__maxdist = np.linalg.norm(self.__pieces-np.array([[self.dim-1,0],]*self.npieces),axis=1).sum()
+        self.__valid_moves = np.zeros((self.dim,self.dim,self.npieces))
+        self.__get_valid_moves()
 
     def __createPieces(self):
         pieces = np.zeros([self.npieces,2])
@@ -60,7 +58,8 @@ class Env(object):
         partialdone = np.count_nonzero(Xs & Ys)
 
         target = np.array([[self.dim-1,0],]*self.npieces)
-        distance = self.__maxdist - np.linalg.norm(self.__pieces-target,axis=1).sum()
+        # distance = np.linalg.norm(self.__pieces-target,axis=1).sum() # norm
+        distance = abs(self.__pieces-target).sum() # coty-block distance
 
         return done, partialdone, distance
 
@@ -101,7 +100,7 @@ class Env(object):
                     return False
             return True
 
-    def valid_moves(self): # return matrix of valid moves
+    def __get_valid_moves(self): # return matrix of valid moves
         '''
         Compute valid moves
         '''
@@ -122,7 +121,8 @@ class Env(object):
                         x = self.__pieces[i,0]
                         y = self.__pieces[i,1] + 1  # move piece down
                     valid_moves[int(y),int(x),i] = 1
-        return valid_moves
+        self.__valid_moves = valid_moves
+        return 
 
     # def __move(self, id, action):
     #     if not self.valid(id, action):       # if piece exists
@@ -145,27 +145,26 @@ class Env(object):
             x = self.__obst.astype(int)[i,0]
             y = self.__obst.astype(int)[i,1]
             state[y,x,1] = 1
-        return state.flatten()
+        return state
 
     def step(self, action):           # one training step
-        y, x, piece_id = np.unravel_index(action,(self.dim,self.dim,self.npieces))
-        self.__pieces[piece_id] = (x,y)
-        done, partial, distance = self.__done()           # return new x and y of pieces
         reward = 0
-        
-        # reward += distance/10
+        y, x, piece_id = np.unravel_index(action,(self.dim,self.dim,self.npieces))
+        if self.valid_moves[y,x,piece_id] == 0: # Move invalid
+            reward += -10
+            valid = False
+        else:
+            valid = True
+            self.__pieces[piece_id] = (x,y)         # move piece
+            self.__get_valid_moves()                # recompute valid moves
+        done, partial, distance = self.__done() # return new x and y of pieces
         # reward += partial/4
         if done:
-            reward += 1
-        
-        
-        # if (action == 0 or action == 3):    # give reward for movement
-        #     reward -= 10                     # negative for moving left and dwon
-        # else:
-        #     reward += 2                     # positive for moving right and up
-        
+            reward += 10
+        else:
+            reward -= distance
         state = self.__get_state()          # get new state
-        return reward, state, done
+        return reward, state, done, valid
 
     @property
     def npieces(self):
@@ -182,3 +181,7 @@ class Env(object):
     @property
     def dim(self):
         return self.__dim
+
+    @property
+    def valid_moves(self):
+        return self.__valid_moves
