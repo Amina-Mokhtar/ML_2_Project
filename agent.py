@@ -20,19 +20,20 @@ class Agent(object):
      - conv
      - convCC
     '''
-    def __init__(self, env,board,model_type='default'):
-        self.__gamma = 0.95                     # discount rate for future reward
+    def __init__(self, env,board,model_type='default',non_valid=True):
+        self.__gamma = 0.75                     # discount rate for future reward
         self.__eps = 1                          # epsilon: beginning exploration prob.
-        self.__eps_min = 0.001                  # min epsilon
-        self.__eps_decay = 0.9995                # epsilon decay
-        self.__batch_size = 64                  # batch size for replay
-        self.__lr = 0.001                       # learning rate: proportion of new value
+        self.__eps_min = 0.01                  # min epsilon
+        self.__eps_decay = 0.99995                # epsilon decay
+        self.__batch_size = 128                  # batch size for replay
+        self.__lr = 0.0001                       # learning rate: proportion of new value
         self.__decay = 6e-3                     # weight decay constant
         self.__env = env                        # environment of the agent
         self.__board = board
-        self.__memory = deque(maxlen=100000)    # array of past actions
+        self.__memory = deque(maxlen=10000000)    # array of past actions
         self.__modeltype = model_type
         self.__model = self.__model_init()
+        self.__non_valid = non_valid
     
     def __model_init(self):          # initialize model, 1 input, 1 hidden, 1 output later
         if self.__modeltype == 'default':
@@ -67,16 +68,17 @@ class Agent(object):
             if self.__modeltype == 'default':
                 state = state.reshape(1,self.__env.state_space)
             else:
-                # state.reshape((self.__env.dim,self.__env.dim,2))
                 state = state.reshape((1,)+state.shape)
-            
-            action = np.argmax(self.__model.predict(state))
-
-            ############## Choose only valid moves ###################################
-            # actions = self.__model.predict(state)
-            # actions_valid = actions.reshape((self.__env.action_space,)) * valid_moves
-            # action = np.random.choice(np.arange(self.__env.action_space)[actions_valid==actions_valid.max()]) # choose random action of all valid
-            ############## Choose only valid moves ###################################
+        
+            if self.__non_valid == True:
+                ############## Choose any move ###########################################
+                action = np.argmax(self.__model.predict(state))
+                ########### OR Choose only valid moves ###################################
+            else:
+                actions = self.__model.predict(state)
+                actions_valid = actions.reshape((self.__env.action_space,)) * valid_moves
+                action = np.random.choice(np.arange(self.__env.action_space)[actions_valid==actions_valid.max()]) # choose random action of all valid
+                ##########################################################################
 
         return action
 
@@ -96,18 +98,21 @@ class Agent(object):
             next_states = states.reshape(self.__batch_size,self.__env.state_space)
         # states = np.squeeze(states)
         # next_states = np.squeeze(next_states)
-    
-        action = np.argmax(self.__model.predict_on_batch(next_states), axis=1)
 
-        ############## Choose only valid moves ###################################
-        # valids = self.__env.valid_moves.flatten()
-        # valid_moves = np.tile(valids.T,(self.__batch_size,1))
-        # actions_new = self.__model.predict_on_batch(next_states)
-        # actions_valid = actions_new * valid_moves
-        # action = np.zeros((self.__batch_size,))
-        # for i in range(self.__batch_size):
-        #     action[i] = np.random.choice(np.arange(self.__env.action_space)[actions_valid[i]==actions_valid[i].max()])
-        ############## Choose only valid moves ###################################       
+        if self.__non_valid == True:
+            ############## Choose any move ###########################################
+            action = np.argmax(self.__model.predict_on_batch(next_states), axis=1)
+        else:
+            ########### OR Choose only valid moves ###################################
+            actions_new = self.__model.predict_on_batch(next_states)
+            valids = self.__env.valid_moves.flatten()
+            valid_moves = np.tile(valids.T,(self.__batch_size,1))
+            actions_valid = actions_new * valid_moves
+            action = np.zeros((self.__batch_size,))
+            for i in range(self.__batch_size):
+                action[i] = np.random.choice(np.arange(self.__env.action_space)[actions_valid[i]==actions_valid[i].max()])
+            ##########################################################################
+
 
         targets = rewards + self.__gamma*action*(1-dones)
         targets_full = self.__model.predict_on_batch(states)
@@ -158,8 +163,10 @@ class Agent(object):
                 if done:
                     print("\nDooooooooone:\n")
                     break
-            print("\nDone, or max. moves reached\n")
+            # print("\nDone, or max. moves reached\n")
             loss.append(score)
+            # Debug().save_all(self.__env.__pieces,self.__env.__obst,valid_moves=self.valid_moves,fname='endEp_'+str(e),action=action)
+
         return loss
 
     def save_model(self,fname="model"):

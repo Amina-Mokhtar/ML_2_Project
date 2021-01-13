@@ -1,5 +1,6 @@
 import numpy as np
 from numpy import random
+from debugs import *
 
 class Env(object):
     '''
@@ -121,7 +122,32 @@ class Env(object):
                         x = self.__pieces[i,0]
                         y = self.__pieces[i,1] + 1  # move piece down
                     valid_moves[int(y),int(x),i] = 1
+        
+        pieces = np.vstack((self.__pieces,self.__obst)).tolist()
+        for i in range(self.npieces):       # find valid jumps
+            x,y = self.__pieces[i]
+            targets = [[x,y]]
+            done = False
+            while done == False:
+                tl = len(targets)
+                for (x,y) in targets:
+                    for (x_,y_) in np.array([[0,1],[1,0],[-1,0],[0,-1]]):
+                        xtarget, ytarget = x+2*x_ , y+2*y_
+                        if ( ([x+x_,y+y_] in pieces) and                 # piece to jump over
+                            ([xtarget,ytarget] not in pieces) and          # no piece at target
+                            (0 <= xtarget < self.dim) and (0 <= ytarget < self.dim) and # target on board
+                            [xtarget,ytarget] not in targets ):             # new target 
+                            targets.append([xtarget,ytarget])
+                    if not (len(targets) > tl):       # no new targets found
+                        done = True
+                        break
+            for x,y in pieces:
+                if [x,y] in targets:
+                    targets.remove([x,y])
+            for x,y in targets:
+                valid_moves[int(y),int(x),i] = 1
         self.__valid_moves = valid_moves
+        # Debug().save_all(self.__pieces,self.__obst,valid_moves=self.valid_moves)
         return 
 
     # def __move(self, id, action):
@@ -151,7 +177,7 @@ class Env(object):
         reward = 0
         y, x, piece_id = np.unravel_index(action,(self.dim,self.dim,self.npieces))
         if self.valid_moves[y,x,piece_id] == 0: # Move invalid
-            reward += -10
+            reward += -15
             valid = False
         else:
             valid = True
@@ -160,7 +186,7 @@ class Env(object):
         done, partial, distance = self.__done() # return new x and y of pieces
         # reward += partial/4
         if done:
-            reward += 10
+            reward += 100
         else:
             reward -= distance
         state = self.__get_state()          # get new state

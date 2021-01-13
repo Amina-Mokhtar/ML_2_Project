@@ -11,7 +11,7 @@ max_moves = 500								# max number of moves
 
 env = Env(dim=4)                        # create an environment object
 board = Board(env,width=800, height=600,draw=0)    # create board
-agent = Agent(env, board,model_type='conv')			# create an agent
+agent = Agent(env, board,model_type='conv',non_valid=False)			# create an agent
 
 loss = agent.train(ep,max_moves)             # Train the agent
 
