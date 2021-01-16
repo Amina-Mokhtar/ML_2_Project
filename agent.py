@@ -1,6 +1,8 @@
 from keras import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
+from keras.layers import Dense, Input, Conv2D, Flatten, BatchNormalization, Activation, add, MaxPooling2D
+from tqdm import tqdm
 from collections import deque
 import numpy as np
 import math
@@ -8,106 +10,117 @@ import random
 
 class Agent(object):
     def __init__(self, env):
-        self.__gamma = 0.9
-        self.__eps = 0.1
+        self.__gamma = 0.75
+        self.__eps = 1.0
         self.__eps_min = 0.01
-        self.__eps_decay = 0.995
-        self.__batch_size = 64
-        self.__lr = 0.001
+        self.__eps_decay = 0.99995
+        self.__batch_size = 128
+        self.__lr = 0.0001
         self.__env = env
-        self.__memory = deque(maxlen=100000)
+        self.__memory = deque(maxlen=10000000)
         self.__model = self.__model()
 
     def __model(self):
         model = Sequential()
-        model.add(Dense(64, input_shape=(6*6+1,), activation='relu'))
-        model.add(Dense(64, activation='relu'))
+        model.add(Conv2D(16, (1, 3), activation='relu', input_shape=self.__env.state_space))
+        # model.add(MaxPooling2D((2, 2)))
+        model.add(Conv2D(16, (3, 1), activation='relu'))
+        # model.add(MaxPooling2D((2, 2)))
+        # model.add(Conv2D(64, (3, 3), activation='relu'))
+        model.add(Flatten())
+        model.add(Dense(16, activation='linear'))
         model.add(Dense(self.__env.action_space, activation='linear'))
         model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
+        # print(model.summary())
         return model
 
     def __remember(self, state, action, reward, next_state, id, done):
         self.__memory.append((state, action, reward, next_state, id, done))
 
     def __act(self, state):
-        # temp_id = 1
-        # if np.random.rand() <= self.__eps:
-        #     moves, jumps = self.__env.availableMoves(temp_id)
-        #     action = np.random.choice(moves + jumps, 1)
-        #     return action[0]
+        ID_mask = self.__env.getIDMask()
+
+        if np.random.rand() <= self.__eps:
+            id = np.random.randint(self.__env.npieces)
+            moves, jumps = self.__env.availableMoves(id)
+            while len(moves) == 0 and len(jumps) == 0:
+                id = np.random.randint(self.__env.npieces)
+                moves, jumps = self.__env.availableMoves(id)
+            action = np.random.choice(moves + jumps, 1)
+            # print("rand")
+            # print(id)
+            return action[0], np.expand_dims(ID_mask[id], axis=0)
 
         best_action = None
         best_value = -math.inf
         best_id = None
 
-        for id in range(4): # change to a variable, dont leave loose ends...
-            model_state = np.append(state, id)
-            act_values = self.__model.predict(np.reshape(np.array(model_state), (1, 6*6+1)))
+        for id in range(self.__env.npieces):
+            model_state = np.append(state, np.expand_dims(ID_mask[id], axis=0), axis=0)
+
+            act_values = self.__model.predict_on_batch(np.expand_dims(model_state, axis=0))
             temp_max = np.max(act_values[0])
             if temp_max > best_value:
                 best_value = temp_max
-                best_id = id
+                best_id = np.expand_dims(ID_mask[id], axis=0)
                 best_action = np.argmax(act_values[0])
 
+        # print("best")
+        # print(best_id)
         return best_action, best_id
 
     def __replay(self):
         if len(self.__memory) < self.__batch_size:
             return
 
+        learning_rate = 0.5
         minibatch = random.sample(self.__memory, self.__batch_size)
-        states = np.array([i[0] for i in minibatch])
-        actions = np.array([i[1] for i in minibatch])
-        rewards = np.array([i[2] for i in minibatch])
-        next_states = np.array([i[3] for i in minibatch])
-        ids = np.array([i[4] for i in minibatch])
-        dones = np.array([i[5] for i in minibatch])
+        states = np.array([np.append(i[0], i[4], axis=0) for i in minibatch])
+        next_states = np.array([np.append(i[3], i[4], axis=0) for i in minibatch])
 
-        next_states_temp = []
-        states_temp = []
-        for i in range(len(next_states)):
-            states_temp.append(np.append(states[i], ids[i]))
-            next_states_temp.append(np.append(next_states[i], ids[i]))
+        current_qs_list = self.__model.predict_on_batch(states)
+        future_qs_list = self.__model.predict_on_batch(next_states)
 
+        X = []
+        Y = []
+        for index, (state, action, reward, _, id, done) in enumerate(minibatch):
+            if not done:
+                max_future_q = reward + self.__gamma * np.max(future_qs_list[index])
+            else:
+                max_future_q = reward
 
-        next_states = np.array(next_states_temp)
-        states = np.array(states_temp)
-        # print("shaaaaaaape")
-        # print(next_states.shape)
-        # print(next_states.shape)
+            current_qs = current_qs_list[index]
+            current_qs[action] = (1 - learning_rate) * current_qs[action] + learning_rate * max_future_q
 
-        targets = rewards + self.__gamma*(np.amax(self.__model.predict_on_batch(next_states), axis=1))*(1-dones)
-        targets_full = self.__model.predict_on_batch(states)
+            X.append(np.append(state, id, axis=0))
+            Y.append(current_qs)
 
-        ind = np.array([i for i in range(self.__batch_size)])
-        targets_full[[ind], [actions]] = targets
+        self.__model.fit(np.array(X), np.array(Y), batch_size=self.__batch_size, verbose=0, shuffle=True)
 
-        self.__model.fit(states, targets_full, epochs=1, verbose=0)
         if self.__eps > self.__eps_min:
             self.__eps *= self.__eps_decay
 
     def train(self, epochs):
         loss = []
-        max_moves = 100
-        re = []
-
-        for e in range(epochs):
+        max_moves = 2000
+        dones = 0
+        move = []
+        for e in tqdm(range(epochs)):
             state = self.__env.reset()
             score = 0
-            print(e)
-            for m in range(max_moves):
+            for i in range(max_moves):
                 action, id = self.__act(state)
-                reward, next_state, done = self.__env.step(action, id)
-                re.append(reward)
-
+                reward, next_state, done = self.__env.step(action, self.__env.mask2num(id) - 1)
                 score += reward
+                self.__env.updateEnv(e, reward, self.__eps, score, dones)
                 self.__remember(state, action, reward, next_state, id, done)
                 state = next_state
                 self.__replay()
                 if done:
-                    print("Dooooooooone:")
+                    dones += 1
+                    move.append((i, e))
                     break
             loss.append(score)
+        print(dones)
         print(loss)
-        #print(re)
-        return loss
+        return loss, move

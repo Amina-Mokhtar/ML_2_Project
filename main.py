@@ -1,20 +1,16 @@
-
 import pygame as pg
-from colors import Colors
 from env import Env
 from agent import Agent
-
+import matplotlib.pyplot as plt
 
 pg.init()
+pg.display.set_caption("Corners")
 
 env = Env(width=800, height=600, dim=6)
-
 agent = Agent(env)
-loss = agent.train(50)
-
-screen, background, X, Y = env.vars()
 
 game_exit = False
+
 while not game_exit:
     for event in pg.event.get():
         if event.type == pg.QUIT:
@@ -29,11 +25,16 @@ while not game_exit:
         #     if event.key == pg.K_DOWN:
         #         env.move(1, 3)
 
-    screen.fill(Colors.BACKGROUND)
-    screen.blit(background, (X, Y))
-
-    env.drawPieces(Colors.BLUE, Colors.RED)
-
-    pg.display.update()
-
+    loss, move = agent.train(100)
+    game_exit = True
 pg.quit()
+
+plt.plot(loss)
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.show()
+
+plt.plot([m[1] for m in move], [e[0] for e in move])
+plt.xlabel("Epoch")
+plt.ylabel("Move")
+plt.show()
