@@ -172,8 +172,36 @@ class Env(object):
             y = self.__obst.astype(int)[i,1]
             state[y,x,1] = 1
         return state
+    
+    def __getReward(self, done, id, old_pos):
+        old_pos = old_pos.tolist()
+        new_pos = self.__pieces.tolist()
+        if done:
+            return 100
+        if new_pos[id] == old_pos[id]:
+            return -10
+        if (not (old_pos[id][0] in [0, 1] and old_pos[id][1] in [4, 5])) and \
+            new_pos[id][0] in [0, 1] and new_pos[id][1] in [4, 5]:
+            return -5
+        if old_pos[id][0] in [0, 1] and old_pos[id][1] in [4, 5] and \
+           new_pos[id][0] in [0, 1] and new_pos[id][1] in [4, 5]:
+            return -10
+        if old_pos[id][0] in [0, 1] and old_pos[id][1] in [4, 5] and \
+           not (new_pos[id][0] in [0, 1] and new_pos[id][1] in [4, 5]):
+            return -10
+        if new_pos[id][0] == old_pos[id][0] + 2 or new_pos[id][1] == old_pos[id][1] - 2:
+            return -10
+        if new_pos[id][0] == old_pos[id][0] - 2 or new_pos[id][1] == old_pos[id][1] + 2:
+            return -10
+        if new_pos[id][0] == old_pos[id][0] + 1 or new_pos[id][1] == old_pos[id][1] - 1:
+            return -10
+        if new_pos[id][0] == old_pos[id][0] - 1 or new_pos[id][1] == old_pos[id][1] + 1:
+            return -10
+        return -10
+
 
     def step(self, action):           # one training step
+        pieces_prev = self.__pieces
         reward = 0
         y, x, piece_id = np.unravel_index(action,(self.dim,self.dim,self.npieces))
         if self.valid_moves[y,x,piece_id] == 0: # Move invalid
@@ -183,13 +211,15 @@ class Env(object):
             valid = True
             self.__pieces[piece_id] = (x,y)         # move piece
             self.__get_valid_moves()                # recompute valid moves
+        state = self.__get_state()          # get new state
+
         done, partial, distance = self.__done() # return new x and y of pieces
         # reward += partial/4
         if done:
-            reward += 100
+            reward += 1000
         else:
             reward -= distance
-        state = self.__get_state()          # get new state
+            # reward += self.__getReward(done,piece_id,pieces_prev)
         return reward, state, done, valid
 
     @property

@@ -26,7 +26,7 @@ class Agent(object):
         self.__eps_min = 0.01                  # min epsilon
         self.__eps_decay = 0.99995                # epsilon decay
         self.__batch_size = 128                  # batch size for replay
-        self.__lr = 0.0001                       # learning rate: proportion of new value
+        self.__lr = 0.001                       # learning rate: proportion of new value
         self.__decay = 6e-3                     # weight decay constant
         self.__env = env                        # environment of the agent
         self.__board = board
@@ -136,6 +136,8 @@ class Agent(object):
 
     def train(self, epochs,moves):            # iterate training
         loss = []
+        win = []
+        eps = []
         max_moves = moves
          
         for e in tqdm(range(epochs)):         # iterate number of epochs
@@ -165,9 +167,12 @@ class Agent(object):
                     break
             # print("\nDone, or max. moves reached\n")
             loss.append(score)
+            win.append(int(done))
+            eps.append(self.__eps)
+            
             # Debug().save_all(self.__env.__pieces,self.__env.__obst,valid_moves=self.valid_moves,fname='endEp_'+str(e),action=action)
 
-        return loss
+        return loss, win, eps
 
     def save_model(self,fname="model"):
         self.__model.save_weights("models/"+fname+".h5")
