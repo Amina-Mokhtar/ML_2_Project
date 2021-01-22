@@ -3,7 +3,6 @@ from env import Env
 from DQN import DQN
 from Double_DQN import Double_DQN
 from Dueling_DQN import Dueling_DQN
-from Noisy_DQN import Noisy_DQN
 from PER_DQN import PER_DQN
 import matplotlib.pyplot as plt
 
@@ -16,7 +15,6 @@ agent_DQN = DQN(env)
 agent_Double_DQN = Double_DQN(env)
 agent_Dueling_DQN = Dueling_DQN(env)
 agent_PER_DQN = PER_DQN(env)
-agent_Noisy_DQN = Noisy_DQN(env)
 
 labels = ['DQN', 'Double_DQN', 'Dueling_DQN', 'PER_DQN', 'Noisy_DQN']
 
@@ -39,13 +37,12 @@ while not game_exit:
     # loss_1, move_1 = agent_DQN.train(epochs=30, max_moves=2000)
     # loss_2, move_2 = agent_Double_DQN.train(epochs=30, max_moves=2000)
     # loss_3, move_3 = agent_Dueling_DQN.train(epochs=30, max_moves=2000)
-    # loss_4, move_4 = agent_PER_DQN.train(epochs=30, max_moves=2000)
-    loss_5, move_5 = agent_Noisy_DQN.train(epochs=30, max_moves=2000)
+    loss_4, move_4 = agent_PER_DQN.train(epochs=30, max_moves=2000)
     game_exit = True
 pg.quit()
 
 # ls = [loss_1, loss_2, loss_3, loss_4]
-ls=[loss_5]
+ls=[loss_4]
 for i in range(len(ls)):
     plt.plot(ls[i], label=labels[i])
 plt.xlabel("Epochs")
@@ -55,7 +52,7 @@ plt.grid()
 plt.show()
 
 # mo = [move_1, move_2, move_3, move_4]
-mo = [move_5]
+mo = [move_4]
 for item in mo:
     plt.plot([e[1] for e in item], [m[0] for m in item], label=labels[i])
 plt.xlabel("Epoch")
