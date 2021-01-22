@@ -1,38 +1,66 @@
-from keras import Sequential
-from keras.layers import Dense
+# import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
 from keras.optimizers import Adam
-from keras.layers import Dense, Input, Conv2D, Flatten, BatchNormalization, Activation, add, MaxPooling2D
+from keras.models import Model
+from keras.layers import Dense, Input, Conv2D, Flatten
 from tqdm import tqdm
 from collections import deque
+from hyperparameters import hyperparameters as hp
 import numpy as np
 import math
 import random
 
-class Agent(object):
+class Noisy_DQN(object):
     def __init__(self, env):
-        self.__gamma = 0.75
-        self.__eps = 1.0
-        self.__eps_min = 0.01
-        self.__eps_decay = 0.99995
-        self.__batch_size = 128
-        self.__lr = 0.0001
+        self.__gamma = hp.gamma
+        self.__eps = hp.eps
+        self.__eps_min = hp.eps_min
+        self.__eps_decay = hp.eps_decay
+        self.__batch_size = hp.batch_size
+        self.__lr = hp.lr
+        self.__learning_rate = hp.learning_rate
         self.__env = env
         self.__memory = deque(maxlen=10000000)
-        self.__model = self.__model()
+        self.model()
 
-    def __model(self):
-        model = Sequential()
-        model.add(Conv2D(16, (1, 3), activation='relu', input_shape=self.__env.state_space))
-        # model.add(MaxPooling2D((2, 2)))
-        model.add(Conv2D(16, (3, 1), activation='relu'))
-        # model.add(MaxPooling2D((2, 2)))
-        # model.add(Conv2D(64, (3, 3), activation='relu'))
-        model.add(Flatten())
-        model.add(Dense(16, activation='linear'))
-        model.add(Dense(self.__env.action_space, activation='linear'))
-        model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
-        # print(model.summary())
-        return model
+    def model(self):
+        # model = Sequential()
+        # model.add(Conv2D(16, (1, 3), activation='relu', input_shape=self.__env.state_space))
+        # model.add(Conv2D(16, (3, 1), activation='relu'))
+        # model.add(Flatten())
+        # model.add(Dense(16, activation='linear'))
+        # model.add(Dense(self.__env.action_space, activation='linear'))
+        # model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
+
+        input = Input(shape=self.__env.state_space)
+        out = Conv2D(filters=16, kernel_size=(1, 3), activation="relu")(input)
+        out = Conv2D(filters=16, kernel_size=(3, 1), activation="relu")(out)
+        out = Flatten()(out)
+        out = tf.nn.relu(self.noisy_dense(64, out))
+        out = tf.nn.relu(self.noisy_dense(64, out))
+        model = self.noisy_dense(self.__env.action_space, out)
+
+        loss = tf.reduce_mean(tf.square(tf.subtract(model, self.__env.action_space)))
+        optimizer = tf.train.AdamOptimizer().minimize(loss)
+
+    def noisy_dense(self, units, input):
+        w_shape = [units, input.shape[1]]
+        # mu_w = tf.Variable(initial_value=tf.truncated_normal(shape=w_shape))
+        mu_w = tf.Variable(initial_value=tf.compat.v1.random.truncated_normal(shape=w_shape))
+        sigma_w = tf.Variable(initial_value=tf.constant(0.017, shape=w_shape))
+        epsilon_w = tf.random_uniform(shape=w_shape)
+
+        b_shape = [units]
+        mu_b = tf.Variable(initial_value=tf.truncated_normal(shape=b_shape))
+        sigma_b = tf.Variable(initial_value=tf.constant(0.017, shape=b_shape))
+        epsilon_b = tf.random_uniform(shape=b_shape)
+
+        w = tf.add(mu_w, tf.multiply(sigma_w, epsilon_w))
+        b = tf.add(mu_b, tf.multiply(sigma_b, epsilon_b))
+
+        return tf.matmul(input, tf.transpose(w)) + b
 
     def __remember(self, state, action, reward, next_state, id, done):
         self.__memory.append((state, action, reward, next_state, id, done))
@@ -47,8 +75,6 @@ class Agent(object):
                 id = np.random.randint(self.__env.npieces)
                 moves, jumps = self.__env.availableMoves(id)
             action = np.random.choice(moves + jumps, 1)
-            # print("rand")
-            # print(id)
             return action[0], np.expand_dims(ID_mask[id], axis=0)
 
         best_action = None
@@ -65,15 +91,14 @@ class Agent(object):
                 best_id = np.expand_dims(ID_mask[id], axis=0)
                 best_action = np.argmax(act_values[0])
 
-        # print("best")
-        # print(best_id)
         return best_action, best_id
 
     def __replay(self):
         if len(self.__memory) < self.__batch_size:
             return
 
-        learning_rate = 0.5
+        X, Y = [], []
+
         minibatch = random.sample(self.__memory, self.__batch_size)
         states = np.array([np.append(i[0], i[4], axis=0) for i in minibatch])
         next_states = np.array([np.append(i[3], i[4], axis=0) for i in minibatch])
@@ -81,16 +106,10 @@ class Agent(object):
         current_qs_list = self.__model.predict_on_batch(states)
         future_qs_list = self.__model.predict_on_batch(next_states)
 
-        X = []
-        Y = []
         for index, (state, action, reward, _, id, done) in enumerate(minibatch):
-            if not done:
-                max_future_q = reward + self.__gamma * np.max(future_qs_list[index])
-            else:
-                max_future_q = reward
-
+            max_future_q = reward + self.__gamma * np.max(future_qs_list[index]) * (1 - done)
             current_qs = current_qs_list[index]
-            current_qs[action] = (1 - learning_rate) * current_qs[action] + learning_rate * max_future_q
+            current_qs[action] = (1 - self.__learning_rate) * current_qs[action] + self.__learning_rate * max_future_q
 
             X.append(np.append(state, id, axis=0))
             Y.append(current_qs)
@@ -100,11 +119,9 @@ class Agent(object):
         if self.__eps > self.__eps_min:
             self.__eps *= self.__eps_decay
 
-    def train(self, epochs):
-        loss = []
-        max_moves = 2000
+    def train(self, epochs, max_moves):
+        loss, moves = [], []
         dones = 0
-        move = []
         for e in tqdm(range(epochs)):
             state = self.__env.reset()
             score = 0
@@ -118,9 +135,7 @@ class Agent(object):
                 self.__replay()
                 if done:
                     dones += 1
-                    move.append((i, e))
+                    moves.append((i, e))
                     break
             loss.append(score)
-        print(dones)
-        print(loss)
-        return loss, move
+        return loss, moves
