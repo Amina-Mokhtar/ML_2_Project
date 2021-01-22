@@ -1,6 +1,7 @@
+from matplotlib.pyplot import pie
 import numpy as np
 from numpy import random
-from debugs import *
+from debugs import Debug
 
 class Env(object):
     '''
@@ -58,7 +59,7 @@ class Env(object):
         done = Xs.all() and Ys.all()
         partialdone = np.count_nonzero(Xs & Ys)
 
-        target = np.array([[self.dim-1,0],]*self.npieces)
+        target = np.array([[self.dim-2,1],]*self.npieces) # [dim-2,1]
         # distance = np.linalg.norm(self.__pieces-target,axis=1).sum() # norm
         distance = abs(self.__pieces-target).sum() # coty-block distance
 
@@ -127,85 +128,55 @@ class Env(object):
         for i in range(self.npieces):       # find valid jumps
             x,y = self.__pieces[i]
             targets = [[x,y]]
+            begin_targets = [[x,y]]
             done = False
             while done == False:
-                tl = len(targets)
-                for (x,y) in targets:
-                    for (x_,y_) in np.array([[0,1],[1,0],[-1,0],[0,-1]]):
-                        xtarget, ytarget = x+2*x_ , y+2*y_
-                        if ( ([x+x_,y+y_] in pieces) and                 # piece to jump over
-                            ([xtarget,ytarget] not in pieces) and          # no piece at target
-                            (0 <= xtarget < self.dim) and (0 <= ytarget < self.dim) and # target on board
-                            [xtarget,ytarget] not in targets ):             # new target 
+                for (x,y) in begin_targets:
+                    targets_new = []
+                    for (xstep,ystep) in np.array([[0,1],[1,0],[-1,0],[0,-1]]):
+                        xtarget, ytarget = x+2*xstep , y+2*ystep
+                        x_over, y_over = x+xstep,y+ystep
+                        if ( ([x_over, y_over] in pieces) and                 # piece to jump over
+                                            ([xtarget,ytarget] not in pieces) and          # no piece at target
+                                            (0 <= xtarget < self.dim) and (0 <= ytarget < self.dim) and # target on board
+                                            ([xtarget,ytarget] not in targets) ):             # new target 
+                            targets_new.append([xtarget,ytarget])
                             targets.append([xtarget,ytarget])
-                    if not (len(targets) > tl):       # no new targets found
-                        done = True
-                        break
-            for x,y in pieces:
-                if [x,y] in targets:
-                    targets.remove([x,y])
+                if len(targets_new) == 0:
+                    done = True
+                    break
+                else:
+                    begin_targets = targets_new
             for x,y in targets:
-                valid_moves[int(y),int(x),i] = 1
+                if [x,y] not in pieces:
+                    valid_moves[int(y),int(x),i] = 1
         self.__valid_moves = valid_moves
         # Debug().save_all(self.__pieces,self.__obst,valid_moves=self.valid_moves)
         return 
-
-    # def __move(self, id, action):
-    #     if not self.valid(id, action):       # if piece exists
-    #         return 
-    #     elif action == 0:
-    #         self.__pieces[id,0] -= 1  # move piece if valid left
-    #     elif action == 1:
-    #         self.__pieces[id,0] += 1  # move piece right
-    #     elif action == 2:
-    #         self.__pieces[id,1] -= 1  # move piece up
-    #     elif action == 3:
-    #         self.__pieces[id,1] += 1  # move piece down
 
     def __get_state(self):      # board state with player and obstacle pos.
         state = np.zeros((self.__dim,self.__dim,2))
         for i in range(self.npieces):
             x = self.__pieces.astype(int)[i,0]
             y = self.__pieces.astype(int)[i,1]
-            state[x,y,0] = 1
+            state[x,y,0] = i
             x = self.__obst.astype(int)[i,0]
             y = self.__obst.astype(int)[i,1]
             state[y,x,1] = 1
         return state
-    
-    def __getReward(self, done, id, old_pos):
-        old_pos = old_pos.tolist()
-        new_pos = self.__pieces.tolist()
-        if done:
-            return 100
-        if new_pos[id] == old_pos[id]:
-            return -10
-        if (not (old_pos[id][0] in [0, 1] and old_pos[id][1] in [4, 5])) and \
-            new_pos[id][0] in [0, 1] and new_pos[id][1] in [4, 5]:
-            return -5
-        if old_pos[id][0] in [0, 1] and old_pos[id][1] in [4, 5] and \
-           new_pos[id][0] in [0, 1] and new_pos[id][1] in [4, 5]:
-            return -10
-        if old_pos[id][0] in [0, 1] and old_pos[id][1] in [4, 5] and \
-           not (new_pos[id][0] in [0, 1] and new_pos[id][1] in [4, 5]):
-            return -10
-        if new_pos[id][0] == old_pos[id][0] + 2 or new_pos[id][1] == old_pos[id][1] - 2:
-            return -10
-        if new_pos[id][0] == old_pos[id][0] - 2 or new_pos[id][1] == old_pos[id][1] + 2:
-            return -10
-        if new_pos[id][0] == old_pos[id][0] + 1 or new_pos[id][1] == old_pos[id][1] - 1:
-            return -10
-        if new_pos[id][0] == old_pos[id][0] - 1 or new_pos[id][1] == old_pos[id][1] + 1:
-            return -10
-        return -10
 
+    def __move_dist(self, pieces_prev,id):
+        cityblock = (self.__pieces[id] - pieces_prev[id])*np.array([1,-1])
+        norm = np.linalg.norm(cityblock)
+        move_dist = norm*np.sign(cityblock.sum())
+        return move_dist
 
     def step(self, action):           # one training step
-        pieces_prev = self.__pieces
+        pieces_prev = np.copy(self.__pieces)
         reward = 0
-        y, x, piece_id = np.unravel_index(action,(self.dim,self.dim,self.npieces))
+        y, x, piece_id = np.unravel_index(action,(self.dim,self.dim,self.npieces)) # pylint: disable=unbalanced-tuple-unpacking
         if self.valid_moves[y,x,piece_id] == 0: # Move invalid
-            reward += -15
+            reward += -1
             valid = False
         else:
             valid = True
@@ -216,10 +187,16 @@ class Env(object):
         done, partial, distance = self.__done() # return new x and y of pieces
         # reward += partial/4
         if done:
-            reward += 1000
+            reward += 10
         else:
-            reward -= distance
-            # reward += self.__getReward(done,piece_id,pieces_prev)
+            # reward += -1
+            # reward -= distance/10
+            move_dist = self.__move_dist(pieces_prev,piece_id)
+            if move_dist>0:
+                reward += move_dist
+            else:
+                reward += move_dist*0.01
+
         return reward, state, done, valid
 
     @property

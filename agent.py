@@ -1,12 +1,13 @@
-from keras import Sequential, regularizers
+import os
+os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
+os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin/'
+from keras import Sequential, regularizers, utils
 from keras.models import Model as KerasModel
-from keras.layers import Dense, Input, Conv2D, Flatten, BatchNormalization, Activation, add, MaxPooling2D
+from keras.layers import Dense, Input, Conv2D, Flatten, BatchNormalization, Activation, add, Masking
 from keras.optimizers import Adam, SGD
 from collections import deque
 import numpy as np
 import random as rnd
-import tensorflow as tf
-# from tensorflow.python.keras.utils.generic_utils import validate_config
 from tqdm import tqdm
 from env import *
 from board import *
@@ -20,20 +21,20 @@ class Agent(object):
      - conv
      - convCC
     '''
-    def __init__(self, env,board,model_type='default',non_valid=True):
+    def __init__(self, env,board,model_type='default',allow_non_valid=True):
         self.__gamma = 0.75                     # discount rate for future reward
         self.__eps = 1                          # epsilon: beginning exploration prob.
-        self.__eps_min = 0.01                  # min epsilon
-        self.__eps_decay = 0.99995                # epsilon decay
-        self.__batch_size = 128                  # batch size for replay
-        self.__lr = 0.001                       # learning rate: proportion of new value
-        self.__decay = 6e-3                     # weight decay constant
+        self.__eps_min = 0.1                  # min epsilon
+        self.__eps_decay = 0.999995                # epsilon decay
+        self.__batch_size = 32                  # batch size for replay
+        self.__lr = 0.0001                       # learning rate: proportion of new value
         self.__env = env                        # environment of the agent
         self.__board = board
-        self.__memory = deque(maxlen=10000000)    # array of past actions
+        self.__memory = deque(maxlen=1000000)    # array of past actions
         self.__modeltype = model_type
         self.__model = self.__model_init()
-        self.__non_valid = non_valid
+        self.__allow_non_valid = allow_non_valid
+        # self.__debug = Debug()
     
     def __model_init(self):          # initialize model, 1 input, 1 hidden, 1 output later
         if self.__modeltype == 'default':
@@ -46,15 +47,19 @@ class Agent(object):
             model = self.__build_convCC()
         if self.__modeltype == 'conv':
             model = Sequential()
-            model.add(Conv2D(16, (1, 3), activation='relu', input_shape=(self.__env.dim,self.__env.dim,2)))
-            # model.add(MaxPooling2D((2, 2)))
-            model.add(Conv2D(16, (3, 1), activation='relu'))
-            # model.add(MaxPooling2D((2, 2)))
-            # model.add(Conv2D(64, (3, 3), activation='relu'))
+            model.add(Conv2D(16, (3, 3), activation='relu', padding='same', input_shape=(self.__env.dim,self.__env.dim,2)))
+            # model.add(Masking(mask_value=0., input_shape=(self.__env.action_space)))
+            model.add(BatchNormalization())
+            model.add(Activation('relu'))
+            model.add(Conv2D(16, (3, 3), activation='relu', padding='same'))
+            model.add(BatchNormalization())
+            model.add(Activation('relu'))
             model.add(Flatten())
             model.add(Dense(self.__env.action_space, activation='linear'))
-            model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
+            model.compile(loss='mae', optimizer=Adam(lr=self.__lr))
         # print(model.summary())
+        # dot_img_file = 'model_1.png'
+        # utils.plot_model(model, to_file=dot_img_file, show_shapes=True)
         return model
 
     def __remember(self, state, action, reward, next_state, done):      # add previous to memory
@@ -64,29 +69,63 @@ class Agent(object):
         valid_moves = self.__env.valid_moves.flatten()
         if np.random.rand() <= self.__eps:          # choose any valid move
             action = np.random.choice(np.arange(self.__env.action_space)[valid_moves == 1])
+            actions = None
+            actions_valid = None
         else:
             if self.__modeltype == 'default':
                 state = state.reshape(1,self.__env.state_space)
             else:
                 state = state.reshape((1,)+state.shape)
         
-            if self.__non_valid == True:
+            if self.__allow_non_valid == True:
                 ############## Choose any move ###########################################
-                action = np.argmax(self.__model.predict(state))
+                actions = self.__model.predict(state)
+                action = np.argmax(actions)
+                actions_valid = actions.reshape((self.__env.action_space,)) * valid_moves
                 ########### OR Choose only valid moves ###################################
             else:
                 actions = self.__model.predict(state)
                 actions_valid = actions.reshape((self.__env.action_space,)) * valid_moves
                 action = np.random.choice(np.arange(self.__env.action_space)[actions_valid==actions_valid.max()]) # choose random action of all valid
                 ##########################################################################
-
+            # self.__debug.animate(pc=self.__env._Env__pieces,ob=self.__env._Env__obst,valid_moves=valid_moves,actions=actions,actions_valid=actions_valid,action=action,fname='all')
         return action
+
+
+    def __replay_new(self):
+        """
+        docstring
+        """
+        if len(self.__memory) < self.__batch_size:                  # if memory is not full yet
+            return
+        valid_moves = self.__env.valid_moves.flatten()
+
+        minibatch = rnd.sample(self.__memory, self.__batch_size) # choose batch_size unique elements from mem
+        states = np.array([i[0] for i in minibatch])                # get states from minibatch
+        actions = np.array([i[1] for i in minibatch])               # get actions from minibatch
+        rewards = np.array([i[2] for i in minibatch])               # get rewards from minibatch
+        next_states = np.array([i[3] for i in minibatch])           # get next_states from minibatch
+        dones = np.array([i[4] for i in minibatch])                 # get dones from minibatch
+
+        q_eval = self.__model.predict(states) * valid_moves
+        q_next = self.__model.predict(next_states) * valid_moves
+
+        q_target = q_eval.copy()
+
+        batch_index = np.arange(self.__batch_size, dtype=np.int32)
+
+        q_target[batch_index, actions] = rewards + self.__gamma*np.max(q_next, axis=1)*dones
+
+        _ = self.__model.fit(states, q_target, verbose=0)
+
+        if self.__eps > self.__eps_min:
+            self.__eps *= self.__eps_decay
 
     def __replay(self):                                             # replay and update weights
         if len(self.__memory) < self.__batch_size:                  # if memory is not full yet
             return
 
-        minibatch = rnd.sample(self.__memory, self.__batch_size) # choose batch_size unique elements from mem 
+        minibatch = rnd.sample(self.__memory, self.__batch_size) # choose batch_size unique elements from mem
         states = np.array([i[0] for i in minibatch])                # get states from minibatch
         actions = np.array([i[1] for i in minibatch])               # get actions from minibatch
         rewards = np.array([i[2] for i in minibatch])               # get rewards from minibatch
@@ -99,7 +138,7 @@ class Agent(object):
         # states = np.squeeze(states)
         # next_states = np.squeeze(next_states)
 
-        if self.__non_valid == True:
+        if self.__allow_non_valid == True:
             ############## Choose any move ###########################################
             action = np.argmax(self.__model.predict_on_batch(next_states), axis=1)
         else:
@@ -113,8 +152,11 @@ class Agent(object):
                 action[i] = np.random.choice(np.arange(self.__env.action_space)[actions_valid[i]==actions_valid[i].max()])
             ##########################################################################
 
+        # q_eval = self.__model.predict(state)
+        # q_next = self.__model.predict(new_state)
+        
 
-        targets = rewards + self.__gamma*action*(1-dones)
+        targets = rewards + self.__gamma*action*(dones)
         targets_full = self.__model.predict_on_batch(states)
 
         ind = np.array([i for i in range(self.__batch_size)])
@@ -124,54 +166,41 @@ class Agent(object):
         if self.__eps > self.__eps_min:
             self.__eps *= self.__eps_decay
 
-    def __print_action(self, action, piece_id):
-        if action == 0:
-            print(str(piece_id)+" left")
-        elif action == 1:
-            print(str(piece_id)+" right")
-        elif action == 2:
-            print(str(piece_id)+" up")
-        elif action == 3:
-            print(str(piece_id)+" down")
-
     def train(self, epochs,moves):            # iterate training
         loss = []
         win = []
         eps = []
-        max_moves = moves
          
         for e in tqdm(range(epochs)):         # iterate number of epochs
             state = self.__env.reset() 
             score = 0
+            self.__board.draw_board()
             
-            for m in tqdm(range(max_moves)):    # iterate moves until win or max. moves
+            for m in tqdm(range(moves),disable=True):    # iterate moves until win or max. moves
                 action = self.__act(state)
                 reward, next_state, done, valid = self.__env.step(action)
-                score += reward
+                # if (m < moves - 1): 
+                #     reward += 0                # do not give reward unless it is last move
                 self.__remember(state, action, reward, next_state, done)
                 state = next_state
-                self.__replay()
+                self.__replay_new()
 
-                # y, x, piece_id = np.unravel_index(action,(self.__env.dim,self.__env.dim,self.__env.npieces))
-                # valid = self.__env.valid_moves[y,x,piece_id]
-                text = str(valid) + \
-                        ", Episode: {:<4d}".format(e) +'/'+str(epochs) + \
-                        ", Move: {:<4d}".format(m) + \
-                        ', Reward: '+ "{:.2f}".format(reward)
-                        # str(piece_id)+' '+str(x)+','+str(y) + \
-                text2 = "eps: {:.2f}".format(self.__eps)
-                self.__board.draw_board(text,text2)
+                score += reward
 
+                text = [str(valid),
+                        "Episode: {:<4d}".format(e) +'/'+str(epochs),
+                        "Move: {:<4d}".format(m) +'/'+str(moves),
+                        'Reward: '+ "{:.2f}".format(reward) ,
+                        "eps: {:.2f}".format(self.__eps)]
+                
+                self.__board.draw_board(text)
                 if done:
-                    print("\nDooooooooone:\n")
                     break
-            # print("\nDone, or max. moves reached\n")
             loss.append(score)
             win.append(int(done))
             eps.append(self.__eps)
-            
-            # Debug().save_all(self.__env.__pieces,self.__env.__obst,valid_moves=self.valid_moves,fname='endEp_'+str(e),action=action)
-
+            # self.__debug.savemov()
+        # self.__debug.savemovfin()
         return loss, win, eps
 
     def save_model(self,fname="model"):
@@ -185,7 +214,8 @@ class Agent(object):
 
     def __build_convCC(self):
         main_input = Input(shape=(self.__env.dim,self.__env.dim,2))
-        regularizer = regularizers.l2(self.__decay)
+        decay = 6e-3                     # weight decay constant
+        regularizer = regularizers.l2(decay)
 
         x = Conv2D(filters=64, kernel_size=3, kernel_regularizer=regularizer, padding='valid')(main_input)
         x = BatchNormalization()(x)
@@ -207,12 +237,12 @@ class Agent(object):
 
         model = KerasModel(inputs=[main_input], outputs=[policy])
         # model.compile(loss=self.softmax_cross_entropy_with_logits, optimizer=SGD(lr=self.__lr, momentum=0.9, nesterov=True))
-        model.compile(loss='mse', optimizer=SGD(lr=self.__lr, momentum=0.9, nesterov=True))
+        model.compile(loss='mae', optimizer=SGD(lr=self.__lr, momentum=0.9, nesterov=True))
 
         return model
 
-    def softmax_cross_entropy_with_logits(y_true, y_pred):
-        return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_true, logits=y_pred)
+    # def softmax_cross_entropy_with_logits(y_true, y_pred):
+    #     return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_true, logits=y_pred)
 
     def policy_head(self, head_input, regularizer):
         x = Conv2D(filters=16, kernel_size=1, kernel_regularizer=regularizer)(head_input)

@@ -1,30 +1,22 @@
-import pygame as pg
 import matplotlib.pyplot as plt
 import time
-# from colors import Colors
 from env import Env
 from agent import Agent
 from board import Board
 
-ep = 50                            	# number of episodes
-max_moves = 2000							# max number of moves
-dim = 6
+max_moves = 400							# max number of moves
+ep = int(160000/max_moves)                            	# number of episodes
+dim = 4
 model_type = 'conv'
-non_valid = False
+allow_non_valid = False
 
 env = Env(dim)                        # create an environment object
-board = Board(env,width=800, height=600,draw=0)    # create board
-agent = Agent(env, board,model_type,non_valid)			# create an agent
+board = Board(env,width=800, height=600,draw=-1)    # create board
+agent = Agent(env, board,model_type,allow_non_valid)			# create an agent
 
 loss, win, eps = agent.train(ep,max_moves)             # Train the agent
 
-note = 'board size:'+str(dim)+', reward:[-distance,win:1000], model:'+model_type+', allow_non_valid:'+str(non_valid)
-# note = ''+'Model: '+model_type+'Valid: '+str(non_valid)           # note to add to image
-# plt.plot([i for i in range(ep)], loss)
-# plt.xlabel('episode')
-# plt.ylabel('reward')
-# plt.title('Training with ' + str(ep) + ' episodes.\n' + note)
-# plt.savefig("training_" + time.strftime("%Y-%m-%d_%H-%M-%S") +".png")
+note = 'board size:'+str(dim)+', max_moves:'+str(max_moves)+', reward:[win:10,+norm,-norm/100], model:'+model_type+',\n allow_non_valid:'+str(allow_non_valid)
 
 fig, host = plt.subplots()
 fig.subplots_adjust(right=0.75)
@@ -42,6 +34,7 @@ par2.spines["right"].set_visible(True)
 p1, = host.plot([i for i in range(ep)], loss, "b-", label="Loss")
 p2, = par1.plot([i for i in range(ep)], eps, "r-", label="Epsilon")
 p3, = par2.plot([i for i in range(ep)], win, "g-", label="Done")
+par2.set_ylim(0,1)
 host.set_xlabel("Episode")
 host.set_ylabel("Loss")
 par1.set_ylabel("Epsilon")
@@ -59,4 +52,4 @@ host.legend(lines, [l.get_label() for l in lines])
 host.set_title('Training with ' + str(ep) + ' episodes.\n' + note)
 fig.savefig("training_" + time.strftime("%Y-%m-%d_%H-%M-%S") +".png")
 
-agent.save_model(time.strftime("%Y-%m-%d_%H-%M-%S"))
+# agent.save_model(time.strftime("%Y-%m-%d_%H-%M-%S"))

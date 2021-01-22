@@ -39,14 +39,13 @@ class Board(object):
          next(self.__color)
       return background
 
-   def draw_board(self,text='',text2=''):
+   def draw_board(self,text=['']):
       if self.__draw >= 0:
          self.__screen.fill(Colors.BACKGROUND)  # fill screen with background colour
          self.__screen.blit(self.__background, (self.__X, self.__Y)) # draw board squares onto screen
-         img = self.__font.render(text, True, Colors.WHITE)
-         img2 = self.__font.render(text2, True, Colors.WHITE)
-         self.__screen.blit(img, (20, 20))
-         self.__screen.blit(img2, (20, 60))
+         for t in range(len(text)):
+            img = self.__font.render(text[t], True, Colors.WHITE)
+            self.__screen.blit(img, (20, 20+t*20))
          self.__drawPieces() # draw pieces on board
          pg.display.update()
          for event in pg.event.get():
