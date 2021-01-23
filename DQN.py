@@ -24,15 +24,11 @@ class DQN(object):
     def __model(self):
         model = Sequential()
         model.add(Conv2D(16, (1, 3), activation='relu', input_shape=self.__env.state_space))
-        # model.add(MaxPooling2D((2, 2)))
         model.add(Conv2D(16, (3, 1), activation='relu'))
-        # model.add(MaxPooling2D((2, 2)))
-        # model.add(Conv2D(64, (3, 3), activation='relu'))
         model.add(Flatten())
         model.add(Dense(16, activation='linear'))
         model.add(Dense(self.__env.action_space, activation='linear'))
         model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
-        # print(model.summary())
         return model
 
     def __remember(self, state, action, reward, next_state, id, done):

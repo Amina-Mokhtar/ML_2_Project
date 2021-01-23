@@ -1,11 +1,13 @@
 from keras.optimizers import Adam
 from buffer import ReplayBuffer
-from nn import BaseDeepQNet
+from nn import DuelingDeepQNet
+from collections import deque
 import numpy as np
+import random
 import math
 
-class AgentBaseDeepQNet(object):
-    def __init__(self, env, lr, gamma, batch_size, eps_dec, mem_size=1000000):
+class AgentPERDeepQNet(object):
+    def __init__(self, env, lr, gamma, batch_size, eps_dec=0.9996, mem_size=1000000, replace=100):
         self.env = env
         self.action_space = [i for i in range(self.env.action_space)]
         self.gamma = gamma
@@ -13,13 +15,16 @@ class AgentBaseDeepQNet(object):
         self.eps_dec = eps_dec
         self.eps_min = 0.01
         self.batch_size = batch_size
+
+        self.replace = replace
         self.memory = ReplayBuffer(mem_size, self.env.state_space)
-        self.q_eval = BaseDeepQNet(self.env.state_space, self.env.action_space)
-        self.q_eval.compile(optimizer=Adam(learning_rate=lr),
-                            loss='mean_squared_error')
+        self.priority = deque(maxlen=mem_size)
+
+        self.q_eval = DuelingDeepQNet(self.env.state_space, self.env.action_space)
+        self.q_eval.compile(optimizer=Adam(learning_rate=lr), loss='mean_squared_error')
 
     def remember(self, state, action, reward, new_state, piece_id, done):
-        self.memory.push(state, action, reward, new_state, piece_id, done)
+        self.memory.prioritize(state, action, reward, new_state, piece_id, done, self.q_eval, self.gamma)
 
     def decay_eps(self):
         if self.eps > self.eps_min:
@@ -54,7 +59,8 @@ class AgentBaseDeepQNet(object):
 
     def replay(self):
         if self.memory.memory_cntr > self.batch_size:
-            states, actions, rewards, new_states, dones = self.memory.sample(self.batch_size)
+
+            states, actions, rewards, new_states, dones = self.memory.get_priority_sample(self.batch_size)
 
             q_eval = self.q_eval.call(states)
             q_next = self.q_eval.call(new_states)

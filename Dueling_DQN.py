@@ -30,14 +30,8 @@ class Dueling_DQN(object):
         model = Flatten()(model)
         model = Dense(16, activation='relu')(model)
         value = Dense(1, activation="relu")(model)
-
-        # advantage = Dense(16, activation="relu")(model)
         advantage = Dense(self.__env.action_space, activation="linear")(model)
-        # advantage_mean = Lambda(lambda x: K.mean(x, axis=1))(advantage)
-        # advantage = Subtract()([advantage, advantage_mean])
-        # model = Add()([value, advantage])
         model = (value + (advantage - tf.math.reduce_mean(advantage, axis=1, keepdims=True)))
-
         final_model = Model(inputs=input, outputs=model)
         final_model.compile(loss='mse', optimizer=Adam(lr=self.__lr))
         return final_model
