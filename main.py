@@ -1,4 +1,5 @@
 import pygame as pg
+import numpy as np
 from env import Env
 from Agent_DQN import AgentBaseDeepQNet
 from hyperparameters import hyperparameters as hp
@@ -49,6 +50,9 @@ pg.quit()
 
 for i in range(len(losses)):
     plt.plot(losses[i], label=labels[i])
+    print(labels[i])
+    print(np.mean(losses[i]))
+
 plt.xlabel("Epochs")
 plt.ylabel("Loss")
 plt.legend(labels, loc="best")
@@ -57,9 +61,14 @@ plt.show()
 
 
 for i in range(len(moves)):
-    plt.plot([e[1] for e in moves[i]], [m[0] for m in moves[i]], label=labels[i])
+    move = [m[0] for m in moves[i]]
+    plt.plot([e[1] for e in moves[i]], move, label=labels[i])
+    print(labels[i])
+    print(np.mean(move))
+
 plt.xlabel("Epoch")
 plt.ylabel("Move")
 plt.legend(labels, loc="best")
 plt.grid()
 plt.show()
+

@@ -52,7 +52,7 @@ class BaseDeepQNet(keras.Model):
         self.conv1 = Conv2D(16, (1, 3), activation='relu', input_shape=input_dims)
         self.conv2 = Conv2D(16, (3, 1), activation='relu')
         self.flat = Flatten()
-        self.dense1 = Dense(16, activation='relu')
+        self.dense1 = Dense(64, activation='relu')
         self.dense2 = Dense(n_actions, activation='linear')
 
     def call(self, state):
@@ -70,7 +70,7 @@ class DuelingDeepQNet(keras.Model):
         self.conv1 = Conv2D(16, (1, 3), activation='relu', input_shape=input_dims)
         self.conv2 = Conv2D(16, (3, 1), activation='relu')
         self.flat = Flatten()
-        self.dense1 = Dense(16, activation='linear')
+        self.dense1 = Dense(64, activation='linear')
         self.dense2 = Dense(n_actions, activation='linear')
         self.V = Dense(1, activation=None)
         self.A = Dense(n_actions, activation=None)

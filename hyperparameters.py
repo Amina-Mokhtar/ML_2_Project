@@ -1,5 +1,5 @@
 class hyperparameters(object):
-    gamma = 0.9
+    gamma = 0.95
     eps = 1.0
     eps_min = 0.01
     eps_decay = 0.99995
